@@ -1,0 +1,51 @@
+# Enhanced Ollama Dockerfile with Blackwell RTX 5070 Ti support
+FROM nvidia/cuda:12.9.1-cudnn-runtime-ubuntu24.04
+
+WORKDIR /app
+
+# Set environment variables for Blackwell optimization
+ENV CUDA_VERSION=12.9.1
+# RTX 5070 Ti Blackwell compute capability 12.0 (sm_120)
+# Updated: November 30, 2025 - CUDA 12.9.1 recommended for better stability
+ENV TORCH_CUDA_ARCH_LIST="12.0"
+ENV CUDA_DEFAULT_FLOAT_TYPE=bfloat16
+ENV CUDA_DEVICE_MAX_CONNECTIONS=1
+ENV CUDA_CACHE_PATH=/tmp/cuda_cache
+ENV PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    ca-certificates \
+    gnupg \
+    python3 \
+    python3-pip \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Ollama
+RUN curl -fsSL https://ollama.ai/install.sh | sh
+
+# Create directory for models
+RUN mkdir -p /app/models && chmod 755 /app/models
+
+# Install Python for model management (handle wheel conflict gracefully)
+RUN python3 -m pip install --break-system-packages --no-cache-dir --upgrade pip || true
+
+# Install Blackwell-optimized dependencies with CUDA 12.9.1 PyTorch
+# Updated: November 30, 2025 - CUDA 12.9.1 with cu129 for Blackwell RTX 5070 Ti
+# Available cu129 versions: torch 2.9.1, torchvision 0.24.1, torchaudio 2.9.1
+RUN python3 -m pip install --break-system-packages --no-cache-dir \
+    torch==2.9.1 \
+    torchvision==0.24.1 \
+    torchaudio==2.9.1 \
+    --index-url https://download.pytorch.org/whl/cu129
+
+# Set up Ollama environment for Blackwell
+ENV OLLAMA_HOST=0.0.0.0:11434
+ENV OLLAMA_NUM_PARALLEL=4
+ENV OLLAMA_MAX_LOADED_MODELS=2
+
+# Run Ollama server
+CMD ["ollama", "serve"]

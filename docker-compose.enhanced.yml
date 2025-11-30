@@ -1,0 +1,204 @@
+version: '3.8'
+
+services:
+  # Primary embedding service (always on)
+  embeddings:
+    build: .
+    container_name: localai-embeddings
+    ports:
+      - "8000:8000"
+    environment:
+      # Embedding Model Configuration - loaded from .env file
+      - MODEL_NAME=${MODEL_NAME}
+      - MODEL_TYPE=embedding
+      - DEVICE=cuda
+      - MAX_SEQUENCE_LENGTH=512
+      
+      # RTX 5070Ti Memory Management (Ubuntu 24.04 optimized)
+      - CUDA_MEMORY_POOL_FRACTION=0.3
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+      - OMP_NUM_THREADS=8
+      - MKL_NUM_THREADS=8
+      
+      # Ubuntu 24.04 specific CUDA settings
+      - CUDA_VISIBLE_DEVICES=0
+      # ✅ CORRECTED: RTX 5070 Ti compute capability 12.0
+      - TORCH_CUDA_ARCH_LIST=12.0
+      - CUDA_DEFAULT_FLOAT_TYPE=bfloat16
+      - CUDA_DEVICE_MAX_CONNECTIONS=1
+      - CUDA_CACHE_PATH=/tmp/cuda_cache
+      
+      # Performance Optimization
+      - LOG_LEVEL=INFO
+      - BATCH_SIZE=32
+    
+    # GPU Resources configuration
+    runtime: nvidia
+    
+    # Volume mounts for model caching
+    volumes:
+      - ./models:/app/embeddings_models
+      - ./cache:/app/cache
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # OpenAI Compatible API Gateway
+  openai-api:
+    build: .
+    container_name: localai-openai-api
+    ports:
+      - "8001:8001"
+    command: ["python", "openai_compatible_api.py"]
+    environment:
+      # API Configuration
+      - OPENAI_COMPATIBLE_PORT=8001
+      - OPENAI_API_KEY=local
+      
+      # Ubuntu 24.04 specific settings
+      - PYTHONUNBUFFERED=1
+      
+      # Service URLs - loaded from .env file
+      - EMBEDDING_SERVICE_URL=${EMBEDDING_SERVICE_URL:-http://ollama:11434}
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      
+    depends_on:
+      ollama:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    
+    restart: unless-stopped
+
+  # Qdrant Vector Database - Storage corruption fix
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-rtx5070ti
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+      - QDRANT__LOG_LEVEL=WARN  # Reduce logging for performance
+      
+      # Storage backend optimization for corruption fix
+      - QDRANT__STORAGE__PATH=./storage
+      - QDRANT__STORAGE__NO_FSYNC=false  # Ensure data integrity
+      - QDRANT__STORAGE__FSYNC=true  # Force fsync for stability
+      
+      # Memory and performance settings
+      - QDRANT__STORAGE__PERFORMANCE__MAX_SEARCH_THREADS=2  # Reduce concurrency
+      - QDRANT__STORAGE__PERFORMANCE__MEMMAP_THRESHOLD_KB=32768  # Lower threshold
+      - QDRANT__STORAGE__OPTIMIZERS__MEMMAP_THRESHOLD_KB=32768  # Sync with performance
+      
+      # Optimizer configuration for stability
+      - QDRANT__STORAGE__OPTIMIZERS__DEFAULT_SEGMENT_NUMBER=2  # Fewer segments
+      - QDRANT__STORAGE__OPTIMIZERS__INDEXING_THRESHOLD_KB=20000  # Lower threshold
+      - QDRANT__STORAGE__OPTIMIZERS__FLUSH_INTERVAL_SEC=2  # More frequent flushes
+      - QDRANT__STORAGE__OPTIMIZERS__MAX_OPTIMIZATION_THREADS=1  # Single thread
+      
+      # WAL configuration for stability
+      - QDRANT__STORAGE__WAL__WAL_CAPACITY_MB=64  # Larger WAL
+      - QDRANT__STORAGE__WAL__WAL_SEGMENTS_AHEAD=1  # Conservative ahead
+      
+      # Disable gridstore for better stability
+      - QDRANT__STORAGE__PERFORMANCE__USE_MMAP=false  # Disable problematic mmap
+    
+    volumes:
+      - qdrant_storage:/qdrant/storage  # Use named volume instead of bind mount
+    
+    healthcheck:
+      disable: true
+    
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G  # Increase memory limit
+        reservations:
+          memory: 1G
+
+  # Ollama Service - Ubuntu 24.04 optimized
+  ollama:
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
+    container_name: localai-ollama
+    ports:
+      - "11434:11434"
+    environment:
+      # Ollama Configuration
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_MODELS=/app/models
+      - CUDA_VISIBLE_DEVICES=0
+      
+      # Ubuntu 24.04 specific settings
+      - PYTHONUNBUFFERED=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      
+      # ✅ CORRECTED: Blackwell RTX 5070 Ti optimizations
+      - TORCH_CUDA_ARCH_LIST=12.0
+      - CUDA_DEFAULT_FLOAT_TYPE=bfloat16
+      - CUDA_DEVICE_MAX_CONNECTIONS=1
+      - CUDA_CACHE_PATH=/tmp/cuda_cache
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+      
+      # Performance settings
+      - OLLAMA_NUM_PARALLEL=4
+      - OLLAMA_MAX_LOADED_MODELS=2
+      - OLLAMA_GPU_LAYERS=35
+      - OLLAMA_GPU_MEMORY_FRACTION=0.6
+      - OLLAMA_MAX_NUM_THREADS=12
+      - OLLAMA_DEBUG=false
+    
+    runtime: nvidia
+    
+    volumes:
+      - ./ollama_data:/app/models
+      - ./cache:/app/cache
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 90s
+    
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+networks:
+  default:
+    name: ai-system-network
+    driver: bridge
+
+volumes:
+  models:
+    driver: local
+  cache:
+    driver: local
+  ollama_data:
+    driver: local
+  qdrant_storage:
+    driver: local
