@@ -14,10 +14,21 @@
 
 ### Software Requirements
 - **Windows 11**: Latest version with WSL2
-- **Docker Desktop**: With WSL2 integration
+- **Docker in WSL2**: Native Linux Docker (not Docker Desktop)
 - **NVIDIA Drivers**: Latest Game Ready or Studio drivers
 - **NVIDIA Container Toolkit**: For GPU passthrough
 - **Ollama**: Windows native application
+
+## 🏗️ Architecture Approach
+
+**Why This Hybrid Setup?**
+This guide implements a **Windows Native + WSL2 Docker** architecture to avoid Docker Desktop issues:
+
+- **Ollama (Windows Native)**: Direct GPU access, no Docker networking overhead
+- **Qdrant (WSL2 Docker)**: Native Linux containers with proper GPU passthrough
+- **Benefits**: Reliable performance, simplified networking, avoid Docker Desktop complications
+
+**Alternative to Docker Desktop**: We use native Docker in WSL2 instead of Docker Desktop for better stability and performance.
 
 ## 📋 Step 1: Windows Environment Setup
 

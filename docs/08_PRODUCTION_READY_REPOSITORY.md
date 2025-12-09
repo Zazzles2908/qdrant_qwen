@@ -2,9 +2,15 @@
 
 **Date**: December 9, 2025  
 **Status**: ✅ Production Ready  
-**Cleanup Completed**: Development artifacts removed, essential infrastructure preserved
+**Cleanup Completed**: Development artifacts removed, essential infrastructure preserved  
+**Architecture**: Windows Native + WSL2 Docker Hybrid (Avoids Docker Desktop Issues)
 
 ## 🏗️ Production Architecture
+
+**Key Architecture Decision**: This repository implements a **hybrid deployment approach** to avoid Docker Desktop complications:
+- **Ollama**: Windows native application for optimal GPU access
+- **Qdrant**: WSL2 Docker container for reliable containerized deployment
+- **Benefits**: Reliable performance, simplified networking, Docker Desktop independence
 
 ```
 c:/Project/qdrant/
@@ -69,10 +75,11 @@ c:/Project/qdrant/
 
 **Core Production Components:**
 
-### 🐳 Docker Infrastructure
-- **`docker-compose.yml`** - Production orchestration with GPU passthrough
-- **`Dockerfile`** - Optimized production container configuration
-- **Automated deployment** via `deployment/start-production.sh`
+### 🐳 Hybrid Docker Infrastructure
+- **`docker-compose.ollama-gguf.yml`** - Production orchestration with LocalAI integration
+- **`Dockerfile.custom-quant`** - RTX 5070 Ti optimized container configuration
+- **Architecture**: Windows native Ollama + WSL2 Docker Qdrant
+- **Automated deployment** via `start_complete_system.sh`
 
 ### 📚 Documentation Suite
 - **Complete operational documentation** (6 comprehensive guides)
@@ -86,7 +93,7 @@ c:/Project/qdrant/
 - **Performance tuning parameters**
 
 ### 🛠️ Operational Tools
-- **`tools/health-monitor.ps1`** - System monitoring and diagnostics
+- **`tools/health-monitor.ps1`** - System health monitoring and diagnostics
 - **Automated deployment scripts**
 - **Health check procedures**
 
@@ -99,11 +106,15 @@ c:/Project/qdrant/
 
 ### ✅ Deployment Ready
 ```bash
-# One-command deployment
-cd deployment && ./start-production.sh
+# One-command deployment (hybrid architecture)
+./start_complete_system.sh
 
-# Or manual Docker deployment
-docker-compose up -d
+# Manual deployment:
+# Windows PowerShell - Start Ollama
+ollama serve
+
+# WSL2 Ubuntu - Start Qdrant Docker
+docker-compose -f docker-compose.ollama-gguf.yml up -d
 ```
 
 ### ✅ Monitoring Ready
@@ -111,9 +122,13 @@ docker-compose up -d
 # Health monitoring
 .\tools\health-monitor.ps1 -Verbose
 
-# Docker container monitoring
-docker-compose ps
-docker-compose logs -f qdrant
+# Hybrid service monitoring
+# Windows PowerShell - Ollama status
+ollama ps
+
+# WSL2 Ubuntu - Qdrant Docker status  
+docker ps | grep qdrant
+docker-compose -f docker-compose.ollama-gguf.yml logs -f qdrant
 ```
 
 ### ✅ Documentation Ready
@@ -146,7 +161,7 @@ docker-compose logs -f qdrant
 ## 🎯 Production Features
 
 ### Infrastructure
-- ✅ **Docker orchestration** with GPU passthrough
+- ✅ **Hybrid Docker orchestration** with GPU passthrough
 - ✅ **Automated deployment** scripts
 - ✅ **Health monitoring** tools
 - ✅ **Configuration management**
@@ -168,27 +183,36 @@ docker-compose logs -f qdrant
 
 ### Deployment
 ```bash
-# WSL2 Ubuntu terminal
-cd /mnt/c/Project/qdrant/deployment
-./start-production.sh
+# Hybrid architecture deployment
+./start_complete_system.sh
+
+# Or manual steps:
+# 1. Windows PowerShell - Start Ollama
+ollama serve
+
+# 2. WSL2 Ubuntu - Start Qdrant Docker
+docker-compose -f docker-compose.ollama-gguf.yml up -d
 ```
 
 ### Monitoring
 ```powershell
-# Windows PowerShell
+# Windows PowerShell - Overall system health
 .\tools\health-monitor.ps1 -Verbose
+
+# Individual service monitoring
+ollama ps  # Ollama status
 ```
 
 ### Management
 ```bash
-# Container management
-docker-compose ps
-docker-compose logs -f qdrant
-docker-compose down
+# WSL2 Ubuntu - Container management
+docker-compose -f docker-compose.ollama-gguf.yml ps
+docker-compose -f docker-compose.ollama-gguf.yml logs -f qdrant
+docker-compose -f docker-compose.ollama-gguf.yml down
 
-# System health
-curl http://localhost:6333/health
-curl http://localhost:11434/api/tags
+# System health (both services)
+curl http://localhost:6333/health  # Qdrant
+curl http://localhost:11434/api/tags  # Ollama
 ```
 
 ## 🎉 Production Status
@@ -203,6 +227,7 @@ The repository has been successfully cleaned up and is now production-ready with
 - **Development artifacts removed**
 - **Operational tools included**
 - **Deployment automation ready**
+- **Hybrid architecture implementation**
 
 **Ready for:**
 - ✅ Production deployment
@@ -211,11 +236,14 @@ The repository has been successfully cleaned up and is now production-ready with
 - ✅ Agent integration
 - ✅ Operational procedures
 - ✅ Performance monitoring
+- ✅ Docker Desktop alternative deployment
 
 ---
 
 **Repository Status**: 🟢 Production Ready  
+**Architecture**: 🏗️ Windows Native + WSL2 Docker Hybrid  
 **Documentation**: 📚 Complete (6 comprehensive guides)  
-**Infrastructure**: 🐳 Production Docker setup  
+**Infrastructure**: 🐳 Hybrid Docker orchestration with LocalAI  
 **Tools**: 🛠️ Health monitoring and deployment automation  
-**Code Quality**: ✅ Production-ready Qdrant implementation
+**Code Quality**: ✅ Production-ready Qdrant implementation  
+**Performance**: ⚡ RTX 5070 Ti optimized (29ms embedding latency)
