@@ -1,0 +1,139 @@
+# Custom Docker Compose for RTX 5070 Ti Optimized Ollama + Qwen3-Embedding + Qdrant
+# This configuration includes LocalAI integration for enhanced performance
+
+version: '3.8'
+
+services:
+  ollama-qwen3-embedding:
+    build:
+      context: .
+      dockerfile: Dockerfile.custom-quant
+    container_name: ollama-qwen3-embedding
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ${MODELS_VOLUME:-./models}:/models
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_ORIGINS=*
+      - NVIDIA_VISIBLE_DEVICES=0
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - CUDA_CAPABILITY=120
+      # RTX 5070 Ti optimizations
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - CUDA_MEMORY_POOL_SIZE=16106127360  # 15GB in bytes
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  localai:
+    image: mudler/localai:latest
+    container_name: localai
+    restart: unless-stopped
+    ports:
+      - "8001:8080"
+    volumes:
+      - ${MODELS_VOLUME:-./models}:/models
+      - localai_data:/root/.localai
+    environment:
+      - MODEL_PATH=/models
+      - GPU_LAYERS=35
+      - THREADS=6
+      - CTX_SIZE=32768
+      - BATCH_SIZE=8
+      - DEBUG=false
+      - MODELS=/models
+      # Performance optimizations
+      - GPU_MEMORY_FRACTION=0.92
+      - FLASH_ATTENTION=true
+      - MIXED_ATTENTION=true
+      - USE_MMAP=true
+      - PRELOAD_MODELS=[{"url":"qwen3-rtx5070ti:q4_k_m_custom"}]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-vector-db
+    restart: unless-stopped
+    ports:
+      - "6333:6333"  # REST API
+      - "6334:6334"  # gRPC API
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+      - QDRANT__STORAGE__OPTIMIZERS__MEMMAP_THRESHOLD_KB=65536
+      - QDRANT__STORAGE__PERFORMANCE__MAX_SEARCH_THREADS=0
+      # RTX 5070 Ti optimizations
+      - QDRANT__STORAGE__PERFORMANCE__MAX_SEARCH_THREADS=6
+      - QDRANT__STORAGE__OPTIMIZERS__DEFAULT_SEGMENT_NUMBER=2
+      - QDRANT__STORAGE__OPTIMIZERS__INDEXING_THRESHOLD=10000
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  qdrant_data:
+    driver: local
+  localai_data:
+    driver: local
+  ollama_data:
+    driver: local
+
+networks:
+  default:
+    name: vector_db_network
+    driver: bridge
